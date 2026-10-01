@@ -1,0 +1,27 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Centrometal WiFi-Box (local)",
+        "description": "Home Assistant jouera le rôle de serveur MQTT local auquel la CM WiFi-Box de la chaudière se connecte. La box se connecte toujours sur le port TCP 1883 : il faut donc rediriger le nom DNS portal.centrometal.hr vers cet hôte et garder le port 1883 (sauf redirection de port).",
+        "data": {
+          "name": "Nom",
+          "port": "Port d'écoute"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Un broker WiFi-Box est déjà configuré sur ce port."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Centrometal WiFi-Box (local)",
+        "data": {
+          "port": "Port d'écoute"
+        }
+      }
+    }
+  }
+}

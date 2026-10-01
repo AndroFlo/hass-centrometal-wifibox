@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Home Assistant test configs
+.HA_VERSION
+home-assistant.log*
+.storage/
+
+# Runtime / captures (never commit boiler credentials or packet captures)
+*.pcapng
+*.pcap
+*.log
+boiler_state.json
+send.json
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local assistant context, not for the public repo
+CLAUDE.md

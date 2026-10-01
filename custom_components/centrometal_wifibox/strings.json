@@ -1,0 +1,27 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Centrometal WiFi-Box (local)",
+        "description": "Home Assistant will act as the local MQTT server the boiler's CM WiFi-Box connects to. The box always connects on TCP 1883, so you must redirect the DNS name portal.centrometal.hr to this host and keep the port at 1883 (unless you use port forwarding).",
+        "data": {
+          "name": "Name",
+          "port": "Listen port"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "A WiFi-Box broker is already configured on this port."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Centrometal WiFi-Box (local)",
+        "data": {
+          "port": "Listen port"
+        }
+      }
+    }
+  }
+}

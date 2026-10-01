@@ -6,6 +6,7 @@ from typing import Any
 
 import voluptuous as vol
 
+from homeassistant.components import mqtt
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -14,7 +15,30 @@ from homeassistant.config_entries import (
 )
 from homeassistant.core import callback
 
-from .const import CONF_NAME, CONF_PORT, DEFAULT_NAME, DEFAULT_PORT, DOMAIN
+from .const import (
+    CONF_NAME,
+    CONF_PRODUCT,
+    CONF_REFRESH_SIGN,
+    CONF_SERIAL,
+    DEFAULT_NAME,
+    DEFAULT_PRODUCT,
+    DOMAIN,
+)
+
+SIGN_LENGTH = 40
+
+
+def _invalid_sign(value: str) -> bool:
+    """A `_sign`, when given, must be 40 hex characters."""
+    if not value:
+        return False
+    if len(value) != SIGN_LENGTH:
+        return True
+    try:
+        int(value, 16)
+    except ValueError:
+        return True
+    return False
 
 
 class WifiboxConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -25,41 +49,63 @@ class WifiboxConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        # The integration is a client of HA's MQTT broker; it needs one configured.
+        if not await mqtt.async_wait_for_mqtt_client(self.hass):
+            return self.async_abort(reason="mqtt_unavailable")
+
+        errors: dict[str, str] = {}
         if user_input is not None:
-            await self.async_set_unique_id(f"{DOMAIN}_{user_input[CONF_PORT]}")
-            self._abort_if_unique_id_configured()
-            return self.async_create_entry(
-                title=user_input.get(CONF_NAME, DEFAULT_NAME), data=user_input
-            )
+            serial = user_input[CONF_SERIAL].strip()
+            sign = user_input.get(CONF_REFRESH_SIGN, "").strip()
+            if _invalid_sign(sign):
+                errors[CONF_REFRESH_SIGN] = "invalid_sign"
+            else:
+                await self.async_set_unique_id(f"{DOMAIN}_{serial}")
+                self._abort_if_unique_id_configured()
+                user_input[CONF_SERIAL] = serial
+                user_input[CONF_REFRESH_SIGN] = sign
+                return self.async_create_entry(
+                    title=user_input.get(CONF_NAME, DEFAULT_NAME), data=user_input
+                )
 
         schema = vol.Schema(
             {
                 vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
-                vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
+                vol.Required(CONF_SERIAL): str,
+                vol.Required(CONF_PRODUCT, default=DEFAULT_PRODUCT): str,
+                vol.Optional(CONF_REFRESH_SIGN, default=""): str,
             }
         )
-        return self.async_show_form(step_id="user", data_schema=schema)
+        return self.async_show_form(
+            step_id="user", data_schema=schema, errors=errors
+        )
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
-        return WifiboxOptionsFlow(config_entry)
+    def async_get_options_flow(config_entry: ConfigEntry) -> WifiboxOptionsFlow:
+        return WifiboxOptionsFlow()
 
 
 class WifiboxOptionsFlow(OptionsFlow):
-    """Allow changing the listen port after setup."""
-
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        self.config_entry = config_entry
+    """Let the replay `_sign` be set or changed after setup."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
         if user_input is not None:
-            data = {**self.config_entry.data, **user_input}
-            self.hass.config_entries.async_update_entry(self.config_entry, data=data)
-            return self.async_create_entry(title="", data={})
+            sign = user_input.get(CONF_REFRESH_SIGN, "").strip()
+            if _invalid_sign(sign):
+                errors[CONF_REFRESH_SIGN] = "invalid_sign"
+            else:
+                return self.async_create_entry(data={CONF_REFRESH_SIGN: sign})
 
-        current_port = self.config_entry.data.get(CONF_PORT, DEFAULT_PORT)
-        schema = vol.Schema({vol.Required(CONF_PORT, default=current_port): int})
-        return self.async_show_form(step_id="init", data_schema=schema)
+        current = self.config_entry.options.get(
+            CONF_REFRESH_SIGN, self.config_entry.data.get(CONF_REFRESH_SIGN, "")
+        )
+        schema = vol.Schema(
+            {vol.Optional(CONF_REFRESH_SIGN, default=current): str}
+        )
+        return self.async_show_form(
+            step_id="init", data_schema=schema, errors=errors
+        )

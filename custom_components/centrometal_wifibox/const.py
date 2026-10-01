@@ -2,13 +2,15 @@
 
 DOMAIN = "centrometal_wifibox"
 
-CONF_PORT = "port"
 CONF_NAME = "name"
+CONF_SERIAL = "serial"
+CONF_PRODUCT = "product"
+# Optional 40-hex `_sign` captured from a real cloud REFRESH, used as the replay variant.
+# Left empty by default: no capture of ours is shipped with the integration.
+CONF_REFRESH_SIGN = "refresh_sign"
 
-# The box always connects to portal.centrometal.hr on TCP 1883, so on the host the
-# box's DNS resolves to, the broker must listen on 1883. The port stays configurable
-# only for NAT/port-forwarding setups.
-DEFAULT_PORT = 1883
+# Boiler type as it appears in the MQTT topics (cm.inst.<product>.<serial>).
+DEFAULT_PRODUCT = "biopl"
 DEFAULT_NAME = "Centrometal WiFi-Box"
 
 MANUFACTURER = "Centrometal"

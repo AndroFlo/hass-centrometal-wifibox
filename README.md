@@ -1,48 +1,56 @@
 # Centrometal WiFi-Box — local Home Assistant integration
 
-Home Assistant integration that acts as a **local MQTT server** for a Centrometal
-boiler fitted with a **CM WiFi-Box**, so the boiler keeps reporting to Home Assistant
-**even if the Centrometal cloud (`portal.centrometal.hr`) is unreachable**.
+Home Assistant integration that reads a Centrometal boiler fitted with a **CM WiFi-Box**
+**through your own MQTT broker** (e.g. the Mosquitto add-on), so the boiler keeps reporting
+to Home Assistant **even if the Centrometal cloud (`portal.centrometal.hr`) is unreachable**.
 
-Instead of talking to the cloud over the web API, this integration makes the WiFi-Box
-connect to a tiny MQTT broker embedded in Home Assistant, answers its sync handshake,
-and periodically pulls all boiler values. It is part of the same ecosystem as
-[`hass-centrometal-boiler`](https://github.com/AndroFlo/hass-centrometal-boiler) (the
-cloud integration) and reuses the same raw codes, so the same boiler reads the same way.
+The WiFi-Box already speaks MQTT — that is how it talks to the cloud — but in a proprietary
+Centrometal dialect (topics `cm.inst/cm.srv`, a `_sync` handshake, a `REFRESH` trigger,
+`B_*` payloads), not generic MQTT with Home Assistant discovery. This integration acts as a
+**client of your MQTT broker**: it subscribes to the box's topic, answers its handshake,
+periodically pulls all values, and turns each raw code into a Home Assistant sensor. It is
+part of the same ecosystem as
+[`hass-centrometal-boiler`](https://github.com/AndroFlo/hass-centrometal-boiler) (the cloud
+integration) and reuses the same raw codes, so the same boiler reads the same way.
 
-> **Status: read-only (phase 1).** The integration only *reads* values — it never sends
-> a control command (turn on/off, setpoints). Target boiler: **BioTec Plus** (`biopl`).
+> **Status: read-only (phase 1).** The integration only *reads* values — it never sends a
+> control command (turn on/off, setpoints). Target boiler: **BioTec Plus** (`biopl`).
 
 ## How it works
 
-The CM WiFi-Box (an ESP module) connects in clear MQTT 3.1.1 to `portal.centrometal.hr`
-on **TCP 1883**, subscribes to `cm.srv.biopl.<serial>` and publishes to
-`cm.inst.biopl.<serial>`. It only dumps its `B_*` / `C1B_*` values in reply to a server
-`{"REFRESH":0}`; otherwise it just sends a `{"wf_req":"?"}` heartbeat every ~30 s.
+```
+CM WiFi-Box ──MQTT──► your broker (Mosquitto) ◄──MQTT── this integration (HA)
+                                                    subscribe cm.inst.<product>.<serial>
+                                                    publish   cm.srv.<product>.<serial>
+```
 
-This integration:
+1. The box connects to your MQTT broker (see **Requirements**) and publishes to
+   `cm.inst.<product>.<serial>`; it subscribes to `cm.srv.<product>.<serial>`.
+2. This integration (an MQTT client, `dependencies: ["mqtt"]`) subscribes to the box's topic.
+3. It answers the box's `_sync` handshake.
+4. It periodically publishes `{"REFRESH":0}` on the server topic to pull every value — the
+   box only dumps its `B_*`/`C1B_*`/`CNT_*` values in reply to a REFRESH.
+5. Each raw code becomes a push sensor (`local_push`).
 
-1. Listens on port **1883** and accepts the box's MQTT connection.
-2. Answers the box's `_sync` handshake.
-3. Periodically sends `{"REFRESH":0}` to pull every value.
-4. Exposes each raw code as a Home Assistant sensor (push, `local_push`).
-
-Inbound messages carry a 40-hex `_sign` whose algorithm is unknown. Because a REFRESH is
-a harmless read, the broker probes three REFRESH variants (captured replay, zero `_sign`,
-no `_sign`) until one triggers a value dump, then keeps it. The HA log says which worked —
-that also answers whether the box verifies inbound signatures.
+Inbound messages carry a 40-hex `_sign` whose algorithm is unknown. Because a REFRESH is a
+harmless read, the bridge probes REFRESH variants until one triggers a value dump, then keeps
+it: zero `_sign`, no `_sign`, and — only if you configured one — a replay of a `_sign` you
+captured yourself from the real cloud. No capture is shipped with the integration. The HA log
+says which variant worked, which also answers whether the box verifies inbound signatures.
 
 ## Requirements
 
-Because the WiFi-Box always connects to `portal.centrometal.hr:1883`, you must:
+- An **MQTT broker configured in Home Assistant** (e.g. the Mosquitto add-on + the MQTT
+  integration). This component is a client of it.
+- The WiFi-Box must reach that broker. Because the box always connects to
+  `portal.centrometal.hr:1883`, you must, on the network the box uses:
+  1. **Redirect DNS** for `portal.centrometal.hr` to your MQTT broker host (router local DNS,
+     AdGuard/Pi-hole, `dnsmasq`…).
+  2. Let the broker **accept the box's connection** (client id / username = the box serial,
+     an 8-hex password). Configure a matching MQTT user or an ACL for it.
 
-1. **Redirect DNS** for `portal.centrometal.hr` to the Home Assistant host, on the network
-   the box uses (e.g. a `dnsmasq`/AdGuard/Pi-hole entry, or your router's local DNS).
-2. Keep the integration's listen port at **1883** on that host (the default), unless you
-   set up port forwarding/NAT.
-
-> ⚠️ If you already run the Mosquitto add-on, it also uses port 1883. Either point the box
-> to a different host, run this broker on another host, or free port 1883 for it.
+No port conflict here: the box connects to your existing broker on 1883 — this integration
+never opens a listening socket.
 
 ## Installation
 
@@ -54,14 +62,20 @@ Because the WiFi-Box always connects to `portal.centrometal.hr:1883`, you must:
 
 ### Manual
 
-Copy `custom_components/centrometal_wifibox` into your HA `config/custom_components/`
-folder and restart.
+Copy `custom_components/centrometal_wifibox` into your HA `config/custom_components/` folder
+and restart.
 
 ## Configuration
 
 Settings → Devices & Services → **Add Integration** → *Centrometal WiFi-Box (local)*.
-Set a name and the listen port (default 1883). Then redirect DNS as above and power-cycle
-the box; sensors appear after the first value dump.
+Enter a name, the **WiFi-Box serial** (e.g. `XXXXXXXX`) and the **boiler type** used in the
+topic (`biopl` for BioTec Plus). Then set up DNS + broker access as above; sensors appear
+after the first value dump.
+
+The optional **captured REFRESH `_sign`** (40 hex) is for the case where the unsigned variants
+get no answer, meaning your box verifies inbound signatures. Capture a cloud REFRESH on
+`cm.srv.<product>.<serial>` before redirecting DNS, and paste its `_sign` here — or later via
+*Configure* on the integration entry. Leave it empty otherwise.
 
 Unmapped raw codes show up as disabled `{?} <code>` sensors — enable them to discover new
 values, and they can then be added to `codes.py`.
@@ -76,9 +90,9 @@ logger:
 
 ## Roadmap
 
-- Phase 1 (this release): read-only local server.
-- Phase 2: control commands (turn on/off, pellet mode, circuits) — only once it is
-  confirmed how the box handles the `_sign` of inbound messages.
+- Phase 1 (this release): read-only, over your MQTT broker.
+- Phase 2: control commands (turn on/off, pellet mode, circuits) — only once it is confirmed
+  how the box handles the `_sign` of inbound messages.
 
 ## License
 

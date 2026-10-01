@@ -1,14 +1,15 @@
 """The Centrometal WiFi-Box (local) integration.
 
-Acts as a local MQTT server the boiler's CM WiFi-Box connects to instead of the
-Centrometal cloud, so Home Assistant keeps reading the boiler even if the cloud is
-down. Read only for now (no control command is sent).
+Makes Home Assistant read a Centrometal boiler's CM WiFi-Box over the local MQTT broker
+(e.g. the Mosquitto add-on) instead of the Centrometal cloud, so it keeps working even if
+the cloud is down. Read only for now (no control command is sent).
 """
 
 from __future__ import annotations
 
 import logging
 
+from homeassistant.components import mqtt
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -24,15 +25,11 @@ PLATFORMS: list[Platform] = [Platform.SENSOR]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up the integration from a config entry."""
+    if not await mqtt.async_wait_for_mqtt_client(hass):
+        raise ConfigEntryNotReady("MQTT integration is not available yet")
+
     coordinator = WifiboxCoordinator(hass, entry)
-    try:
-        await coordinator.async_start()
-    except OSError as err:
-        _LOGGER.error("Cannot start the WiFi-Box broker on port %s: %s",
-                      coordinator.port, err)
-        raise ConfigEntryNotReady(
-            f"Cannot bind MQTT port {coordinator.port}: {err}"
-        ) from err
+    await coordinator.async_start()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -50,5 +47,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload the entry when its options change (e.g. the listen port)."""
+    """Reload the entry when its options change."""
     await hass.config_entries.async_reload(entry.entry_id)

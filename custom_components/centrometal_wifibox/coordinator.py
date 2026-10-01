@@ -1,4 +1,4 @@
-"""Coordinator: owns the local broker and the latest boiler values."""
+"""Coordinator: owns the MQTT bridge and the latest boiler values."""
 
 from __future__ import annotations
 
@@ -9,28 +9,41 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .broker import LocalBroker
-from .const import CONF_PORT, DEFAULT_PORT, SIGNAL_NEW_KEYS, SIGNAL_UPDATE
+from .const import (
+    CONF_PRODUCT,
+    CONF_REFRESH_SIGN,
+    CONF_SERIAL,
+    DEFAULT_PRODUCT,
+    SIGNAL_NEW_KEYS,
+    SIGNAL_UPDATE,
+)
+from .mqtt_bridge import MqttBridge
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class WifiboxCoordinator:
-    """Runs the broker and holds the merged latest value of every raw code."""
+    """Runs the MQTT bridge and holds the merged latest value of every raw code."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
         self.entry = entry
-        self.port: int = entry.data.get(CONF_PORT, DEFAULT_PORT)
+        self.serial: str = entry.data[CONF_SERIAL]
+        self.product: str = entry.data.get(CONF_PRODUCT, DEFAULT_PRODUCT)
+        # The replay `_sign` is user-supplied (options take precedence over setup data).
+        refresh_sign: str = entry.options.get(
+            CONF_REFRESH_SIGN, entry.data.get(CONF_REFRESH_SIGN, "")
+        )
         self.data: dict[str, Any] = {}
-        self.serial: str | None = None
-        self._broker = LocalBroker(self.port, self._on_values, self._on_connect)
+        self._bridge = MqttBridge(
+            hass, self.serial, self.product, self._on_values, refresh_sign
+        )
 
     async def async_start(self) -> None:
-        await self._broker.start()
+        await self._bridge.async_start()
 
     async def async_stop(self) -> None:
-        await self._broker.stop()
+        await self._bridge.async_stop()
 
     @property
     def signal_update(self) -> str:
@@ -41,13 +54,8 @@ class WifiboxCoordinator:
         return f"{SIGNAL_NEW_KEYS}_{self.entry.entry_id}"
 
     @callback
-    def _on_connect(self, serial: str) -> None:
-        self.serial = serial or self.serial
-
-    @callback
-    def _on_values(self, serial: str | None, values: dict[str, Any]) -> None:
-        """Called by the broker (in the HA loop) on every value dump."""
-        self.serial = serial or self.serial
+    def _on_values(self, serial: str, values: dict[str, Any]) -> None:
+        """Called by the bridge (in the HA loop) on every value dump."""
         new_keys = [k for k in values if k not in self.data]
         self.data.update(values)
         if new_keys:

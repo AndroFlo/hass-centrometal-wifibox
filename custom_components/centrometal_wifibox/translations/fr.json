@@ -3,25 +3,35 @@
     "step": {
       "user": {
         "title": "Centrometal WiFi-Box (local)",
-        "description": "Home Assistant jouera le rôle de serveur MQTT local auquel la CM WiFi-Box de la chaudière se connecte. La box se connecte toujours sur le port TCP 1883 : il faut donc rediriger le nom DNS portal.centrometal.hr vers cet hôte et garder le port 1883 (sauf redirection de port).",
+        "description": "Home Assistant lira la chaudière via son propre broker MQTT (par ex. l'add-on Mosquitto). Dirigez la WiFi-Box vers ce broker : redirigez le nom DNS portal.centrometal.hr vers l'hôte du broker et autorisez la connexion de la box sur le broker.",
         "data": {
           "name": "Nom",
-          "port": "Port d'écoute"
+          "serial": "Numéro de série de la WiFi-Box (ex. XXXXXXXX)",
+          "product": "Type de chaudière dans le topic MQTT (ex. biopl)",
+          "refresh_sign": "_sign d'un REFRESH capturé (facultatif, 40 hex) — laissez vide sauf si vous en avez capturé un depuis le vrai cloud ; l'intégration teste alors aussi cette variante de rejeu"
         }
       }
     },
     "abort": {
-      "already_configured": "Un broker WiFi-Box est déjà configuré sur ce port."
+      "already_configured": "Cette WiFi-Box est déjà configurée.",
+      "mqtt_unavailable": "Aucun broker MQTT n'est configuré dans Home Assistant. Configurez d'abord l'intégration MQTT (par ex. l'add-on Mosquitto)."
+    },
+    "error": {
+      "invalid_sign": "Le _sign doit faire exactement 40 caractères hexadécimaux, ou rester vide."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Centrometal WiFi-Box (local)",
+        "description": "Facultatif : le `_sign` d'un REFRESH capturé depuis le vrai cloud Centrometal. Laissez vide pour ne tester que les variantes sans signature.",
         "data": {
-          "port": "Port d'écoute"
+          "refresh_sign": "_sign d'un REFRESH capturé (facultatif, 40 hex) — laissez vide sauf si vous en avez capturé un depuis le vrai cloud ; l'intégration teste alors aussi cette variante de rejeu"
         }
       }
+    },
+    "error": {
+      "invalid_sign": "Le _sign doit faire exactement 40 caractères hexadécimaux, ou rester vide."
     }
   }
 }

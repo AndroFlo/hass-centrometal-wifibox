@@ -3,25 +3,35 @@
     "step": {
       "user": {
         "title": "Centrometal WiFi-Box (local)",
-        "description": "Home Assistant will act as the local MQTT server the boiler's CM WiFi-Box connects to. The box always connects on TCP 1883, so you must redirect the DNS name portal.centrometal.hr to this host and keep the port at 1883 (unless you use port forwarding).",
+        "description": "Home Assistant will read the boiler through its own MQTT broker (e.g. the Mosquitto add-on). Point the WiFi-Box at that broker: redirect the DNS name portal.centrometal.hr to the broker host and let the broker accept the box's connection.",
         "data": {
           "name": "Name",
-          "port": "Listen port"
+          "serial": "WiFi-Box serial (e.g. XXXXXXXX)",
+          "product": "Boiler type in the MQTT topic (e.g. biopl)",
+          "refresh_sign": "Captured REFRESH _sign (optional, 40 hex) — leave empty unless you captured one from the real cloud; the integration then also probes that replay variant"
         }
       }
     },
     "abort": {
-      "already_configured": "A WiFi-Box broker is already configured on this port."
+      "already_configured": "This WiFi-Box is already configured.",
+      "mqtt_unavailable": "No MQTT broker is configured in Home Assistant. Set up the MQTT integration (e.g. the Mosquitto add-on) first."
+    },
+    "error": {
+      "invalid_sign": "The _sign must be exactly 40 hexadecimal characters, or left empty."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Centrometal WiFi-Box (local)",
+        "description": "Optional: the `_sign` of a REFRESH captured from the real Centrometal cloud. Leave empty to only probe the unsigned variants.",
         "data": {
-          "port": "Listen port"
+          "refresh_sign": "Captured REFRESH _sign (optional, 40 hex) — leave empty unless you captured one from the real cloud; the integration then also probes that replay variant"
         }
       }
+    },
+    "error": {
+      "invalid_sign": "The _sign must be exactly 40 hexadecimal characters, or left empty."
     }
   }
 }

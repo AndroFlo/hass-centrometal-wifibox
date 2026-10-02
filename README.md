@@ -81,8 +81,11 @@ values, and they can then be added to `codes.py`.
 
 ### Finding the WiFi-Box serial
 
-It is an 8-character hexadecimal string (digits and `A`-`F`). Easiest sources first:
+It is an 8-character hexadecimal string (digits and `A`-`F`). Where to read it:
 
+- **The boiler's *Information* menu** — on the CM controller, open the *Information* menu and
+  scroll to the WiFi-Box entry: it shows the module's id. This is the authoritative source,
+  since it is the box reporting its own identifier.
 - **The web-boiler.com account or the Centrometal app** — the boiler is listed by serial. This
   is also the name you registered the box under.
 - **The cloud integration, if you already run it** —
@@ -91,8 +94,6 @@ It is an 8-character hexadecimal string (digits and `A`-`F`). Easiest sources fi
   Boiler* → the device), and every entity's unique id is `<serial>-<parameter>`.
 - **The sticker** — on the WiFi-Box itself, or inside the boiler's control panel door where the
   module is fitted. Depending on the batch it is labelled *SN*, *Serial* or *ID*.
-- **The boiler's own menu** — the CM controller shows the WiFi module's identifier in its
-  network/WiFi information screen.
 
 Failing all of that, read it off the network: the box authenticates to the broker with its
 serial as **client id and username** (the password is a separate 8-hex string). A broker it

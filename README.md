@@ -79,6 +79,34 @@ the box turns out to verify inbound signatures. See
 Unmapped raw codes show up as disabled `{?} <code>` sensors — enable them to discover new
 values, and they can then be added to `codes.py`.
 
+### Finding the WiFi-Box serial
+
+It is an 8-character hexadecimal string (digits and `A`-`F`). Easiest sources first:
+
+- **The web-boiler.com account or the Centrometal app** — the boiler is listed by serial. This
+  is also the name you registered the box under.
+- **The cloud integration, if you already run it** —
+  [`hass-centrometal-boiler`](https://github.com/AndroFlo/hass-centrometal-boiler) names each
+  device `Centrometal Boiler <model> <serial>` (Settings → Devices & Services → *Centrometal
+  Boiler* → the device), and every entity's unique id is `<serial>-<parameter>`.
+- **The sticker** — on the WiFi-Box itself, or inside the boiler's control panel door where the
+  module is fitted. Depending on the batch it is labelled *SN*, *Serial* or *ID*.
+- **The boiler's own menu** — the CM controller shows the WiFi module's identifier in its
+  network/WiFi information screen.
+
+Failing all of that, read it off the network: the box authenticates to the broker with its
+serial as **client id and username** (the password is a separate 8-hex string). A broker it
+tries to reach logs that client id on connection, so pointing its DNS at your Mosquitto and
+watching the log reveals the serial even if you have it written down nowhere:
+
+```bash
+# Mosquitto log, box connecting
+grep -i "new client connected" /var/log/mosquitto/mosquitto.log
+```
+
+The same serial appears in the MQTT topics themselves (`cm.inst.biopl.<serial>`), so
+subscribing to `cm.inst.#` on your broker shows it too.
+
 ## Capturing a REFRESH `_sign`
 
 **Try without it first.** Set the integration up with the field empty and watch the log. If you

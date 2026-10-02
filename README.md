@@ -72,13 +72,83 @@ Enter a name, the **WiFi-Box serial** (e.g. `XXXXXXXX`) and the **boiler type** 
 topic (`biopl` for BioTec Plus). Then set up DNS + broker access as above; sensors appear
 after the first value dump.
 
-The optional **captured REFRESH `_sign`** (40 hex) is for the case where the unsigned variants
-get no answer, meaning your box verifies inbound signatures. Capture a cloud REFRESH on
-`cm.srv.<product>.<serial>` before redirecting DNS, and paste its `_sign` here — or later via
-*Configure* on the integration entry. Leave it empty otherwise.
+Leave the optional **captured REFRESH `_sign`** empty on a first run — you only need it if
+the box turns out to verify inbound signatures. See
+[Capturing a REFRESH `_sign`](#capturing-a-refresh-_sign) below.
 
 Unmapped raw codes show up as disabled `{?} <code>` sensors — enable them to discover new
 values, and they can then be added to `codes.py`.
+
+## Capturing a REFRESH `_sign`
+
+**Try without it first.** Set the integration up with the field empty and watch the log. If you
+see `REFRESH variant B/zero-sign works` (or `C/no-sign`), your box does not check inbound
+signatures and you are done — nothing to capture. You only need this section if *no* variant
+ever answers while the box is clearly publishing (`box-> cm.inst...` lines in the log, but no
+value dump).
+
+The catch: only the **real cloud** can produce a valid `_sign`, so it can only be captured
+while the box and the cloud are still talking to each other. A broker of your own that merely
+accepts the box is not enough — with the cloud cut off, nobody sends a REFRESH any more and
+there is no signature to see. Either capture before redirecting DNS (options B and C, which
+watch the box's normal traffic), or redirect it through something that still forwards to the
+cloud (option A). MQTT on port 1883 is unencrypted, so all three only have to read the bytes.
+
+### Option A — Mosquitto as a man-in-the-middle bridge
+
+Put your broker between the box and the cloud: it accepts the box, and forwards everything
+upstream through a **bridge**, logging both directions on the way. In `mosquitto.conf`:
+
+```
+connection centrometal-capture
+address portal.centrometal.hr:1883
+topic # both 0 "" ""
+
+log_type all
+log_dest file /var/log/mosquitto/capture.log
+```
+
+Redirect the box's DNS to this broker (same step as the normal setup). The box reaches the
+cloud as usual, so the cloud keeps polling, and `capture.log` records the REFRESH it sends —
+`_sign` included. Grep the log:
+
+```bash
+grep -o '"_sign":"[0-9a-f]\{40\}"' /var/log/mosquitto/capture.log | sort -u
+```
+
+Remove the `connection` block once you are done, so the box stops reaching the cloud.
+
+### Option B — tcpdump on the gateway
+
+If your router, Pi-hole or HA host sits on the path between the box and the internet:
+
+```bash
+sudo tcpdump -i any -A -s0 'tcp port 1883 and host <box-ip>' | grep -o '"_sign":"[0-9a-f]\{40\}"'
+```
+
+Let it run a few minutes: the cloud polls REFRESH regularly. Keep the `_sign` that appears in a
+packet travelling **towards** the box (server → box) alongside a `REFRESH` key — not one coming
+from the box.
+
+To see full payloads rather than just the signatures, drop the `grep`, or use
+`tshark -i any -f 'tcp port 1883' -Y mqtt -T fields -e mqtt.msg` for decoded MQTT.
+
+### Option C — port mirroring / ARP spoofing
+
+On a switch that supports it, mirror the box's port and capture with Wireshark (filter `mqtt`).
+Without a managed switch, `ettercap`/`bettercap` on your own LAN achieves the same. Only do this
+on a network you own.
+
+### Then
+
+Paste the 40-hex value into the **captured REFRESH `_sign`** field, at setup or later via
+*Configure* on the integration entry. The bridge then probes that replay variant first.
+
+Be aware of two limits. The signature is replayed with a **fresh `srvMsgId`**, so if the unknown
+algorithm covers that field the replay will not validate — in that case no variant can work and
+phase 2 stays blocked until the algorithm is understood. And the `_sign` is specific to your box:
+never paste one from someone else's capture, and treat yours as you would any other value tied to
+your installation.
 
 ## Debugging
 
